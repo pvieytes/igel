@@ -11,8 +11,13 @@
 
 -behaviour(gen_server).
 
+-include_lib("wsock/include/wsock.hrl").
+
 %% API
--export([start_link/1]).
+-export([start_link/1
+	 ]).
+
+-compile([export_all]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -91,9 +96,8 @@ handle_call({connect, Url}, _From, State) ->
 	    {Host, Port, Path} ->  
 		case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
 		    {ok, Sock} ->
-			Req = create_handshake_req(Host,Port, Path),
-			io:format("dbg req: ~p~n", [Req]),
-			ok = gen_tcp:send(Sock,Req),
+			Request = create_handshake_req(Host, Port, Path),
+			ok = gen_tcp:send(Sock,Request),
 			inet:setopts(Sock, [{packet, http}]),
 			{ok, Sock};
 		    _Error ->
@@ -108,12 +112,9 @@ handle_call({connect, Url}, _From, State) ->
     end;
 
 handle_call({send, Data}, _From, State) ->
-    io:format("dbg socket: ~p~n", [State#state.socket]),
     Message = wsock_message:encode(Data, [mask, text]),
-    io:format("dbg msg: ~p~n", [Data]),
     case gen_tcp:send(State#state.socket, Message) of
 	ok ->
-	    io:format("dbg sent~n"),
 	    ok;
 	{error, Reason} ->
 	    io:format("dbg send error: ~p~n", [Reason])
@@ -168,7 +169,6 @@ handle_info({http,Socket,{http_header, _, Name, _, Value}},State) ->
 %% Once we have all the headers, check for the 'Upgrade' flag 
 handle_info({http, Socket, http_eoh},State) ->
     %% Validate headers, set state, change packet type back to raw
-    io:format("dbg status: ~p; socket: ~p~n", [State#state.status, Socket]),
     Headers = State#state.headers, 
     case check_handshake_server_response(Headers) of
 	ok ->
@@ -232,13 +232,42 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc
 %% Convert the ws url string to a tuple
 %%
-%% @spec parse_ws_url(WsUrl::strin()) -> {Domain::string(), Port::integer(), Path::string()} | error
+%% @spec parse_ws_url(WsUrl::strin()) -> {Domain::string(), Port::integer(), Path::string()} 
 %% @end
 %%--------------------------------------------------------------------
-parse_ws_url(_WsUrl) ->
-    %%hardcode example
-   %%{"localhost", 8000, "/ws"}.
-   {"echo.websocket.org", 80, "/"}.
+parse_ws_url(WsUrl) ->
+    Url =
+    	case string:str(WsUrl, "ws://") of
+    	    1 ->
+    		string:substr(WsUrl, 6);
+    	    0 ->
+    		WsUrl
+    	end,
+    {Domain, Port, PathList} =
+	case string:tokens(Url, ":") of
+	    [Url] ->
+		case string:tokens(Url, "/") of
+		    [Dom|Rest] ->
+			{Dom, 80, Rest};
+		    [Dom] ->
+			{Dom, 80, []}
+	       	end;
+	    [Dom, PortRest] ->
+		case string:tokens(PortRest, "/") of
+		    [PortStr|Rest] ->
+			{P, _} = string:to_integer(PortStr),
+			{Dom, P, Rest}
+		end
+	end,
+    Path = 
+	case PathList of
+	    [] ->
+		"/";
+	    PathList ->
+		"/" ++ string:join(PathList, "/")
+	end,
+    {Domain, Port, Path}.
+
 
 create_handshake_req(Host, Port, Path)->
     PortStr = io_lib:format("~p", [Port]),
@@ -303,109 +332,3 @@ parse_received_data(Bin) ->
 
 
 
-
-
-
-
-
-
-
-
-
-%% -record(http_message,{
-%%     type :: response | request,
-%%     start_line :: list({atom(), string()}),
-%%     headers :: list({atom(), string()})
-%%   }).
-
-%% -record(handshake, {
-%%     version      :: integer(),
-%%     message :: #http_message{}
-%%   }).
-
-%% -type bit() :: 0..1.
-
-%% -record(frame, {
-%%     fin = 0:: bit(),
-%%     rsv1 = 0 :: bit(),
-%%     rsv2 = 0 :: bit(),
-%%     rsv3 = 0 :: bit(),
-%%     opcode :: byte(),
-%%     mask :: bit(),
-%%     payload_len :: byte(),
-%%     extended_payload_len :: byte(),
-%%     extended_payload_len_cont :: integer(),
-%%     masking_key :: binary(),
-%%     payload :: binary()}).
-
-%% -record(message, {
-%%     frames = [] :: list(#frame{}),
-%%     payload :: string() | binary(), % FALSE!!! what about control message with code + message
-%%     type :: {text, binary, control, fragmented}
-%%   }).
-
-
-
-
-
-
-
-
-
-%% -spec encode(Data::string() | binary(), Type::atom()) -> binary().
-%% encode(Data, Type) when is_list(Data)->
-%%   encode(list_to_binary(Data), Type);
-
-%% encode(Data, Type)->
-%%   lists:reverse(encode(Data, Type, [])).
-
-%% -spec decode(Data::binary()) -> list(#message{}).
-%% decode(Data) ->
-%%   decode(Data, begin_message, #message{}).
-
-%% -spec decode(Data::binary(), Message::#message{}) -> list(#message{}).
-%% decode(Data, Message) ->
-%%   decode(Data, continue_message, Message).
-
-
-%% %
-%% % Internal
-%% %
-%% -spec encode(Data::binary(), Type :: atom(), Acc ::list()) -> list().
-%% encode(Data, Type, _Acc) when Type =:= ping ; Type =:= pong ; Type =:= close->
-%%   [frame(Data, [fin, {opcode, Type}])];
-%%   %Frame = wsecli_framing:frame(Data, [fin, {opcode, Type}]),
-%%   %wsecli_framing:to_binary(Frame);
-
-%% encode(<<Data:?FRAGMENT_SIZE/binary>>, Type, Acc) ->
-%%   [frame(Data, [fin, {opcode, Type}]) | Acc];
-
-%% encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, []) ->
-%%   encode(Rest, continuation, [frame(Data, [{opcode, Type}]) | []]);
-
-%% encode(<<Data:?FRAGMENT_SIZE/binary, Rest/binary>>, Type, Acc) ->
-%%   encode(Rest, Type, [frame(Data, [{opcode, Type}]) | Acc]);
-
-%% encode(<<>>, _Type, Acc) ->
-%%   Acc;
-
-%% encode(<<Data/binary>>, Type, Acc) ->
-%%   [frame(Data, [fin, {opcode, Type}]) | Acc].
-
-
-
-
-%% -spec decode(Data::binary(), Type :: message_type(), Message::#message{}) -> list(#message{}).
-%% decode(Data, begin_message, _Message) ->
-%%   Frames = wsecli_framing:from_binary(Data),
-%%   lists:reverse(process_frames(begin_message, Frames, []));
-
-%% decode(Data, continue_message, Message) ->
-%%   Frames = wsecli_framing:from_binary(Data),
-%%   lists:reverse(process_frames(continue_message, Frames, [Message | []])).
-
-
-%% -spec frame(Data::binary(), Options::list()) -> binary().
-%% frame(Data, Options) ->
-%%   Frame = wsecli_framing:frame(Data, Options),
-%%   wsecli_framing:to_binary(Frame).
