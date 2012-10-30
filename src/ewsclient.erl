@@ -15,7 +15,8 @@
 	 start_client/0,
 	 start_client/1,
 	 connect/2,
-	 send/2]).
+	 send/2,
+	 override_callback/2]).
 
 
 -define(CHILD(Id, Params), {Id, {ewsclient_server, start_link, [Params]}, permanent, 5000, worker, dynamic}).
@@ -93,3 +94,5 @@ connect(Url, {_Mod, WsClientPid}) ->
 	    {error, "time out"}
     end.
 
+override_callback(CallbackInfo, {_Mod, WsClientPid}) ->
+    gen_server:call(WsClientPid, {override_callback, CallbackInfo}).

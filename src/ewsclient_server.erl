@@ -139,6 +139,17 @@ handle_call({send, Data}, _From, State) ->
 	end,
     {reply, R, State};
 
+
+handle_call({override_callback, {Type, Fun}}, _From, State) ->
+    Callbacks = State#state.callbacks,
+    case Type of
+	on_msg ->
+	    NewCallBacks = Callbacks#callbacks{on_msg=Fun},
+	    {reply, ok, State#state{callbacks=NewCallBacks}};
+	_ ->
+	    {reply, error, State}
+    end;
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
