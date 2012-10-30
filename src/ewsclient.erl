@@ -82,6 +82,14 @@ start_client(Params)->
 
 send(Data, {_Mod, WsClientPid}) ->
     gen_server:call(WsClientPid, {send, Data}).  
-    
+
 connect(Url, {_Mod, WsClientPid}) ->
-    gen_server:call(WsClientPid, {connect, Url}).
+    ResponseTo = self(),
+    gen_server:call(WsClientPid, {connect, Url, ResponseTo}),
+    receive
+	{WsClientPid, connected} ->
+	    ok
+    after 5000 ->
+	    {error, "time out"}
+    end.
+

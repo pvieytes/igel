@@ -38,7 +38,8 @@
 -record(state, {socket,
 		status=?CLOSED,
 		headers=[],
-		callbacks=#callbacks{}
+		callbacks=#callbacks{},
+		response_connection
 	       }).
 
 %% macros
@@ -98,7 +99,7 @@ init(_Params) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({connect, Url}, _From, State) ->
+handle_call({connect, Url, ResponseTo}, _From, State) ->
     R =
 	case parse_ws_url(Url) of
 	    error -> 
@@ -116,7 +117,9 @@ handle_call({connect, Url}, _From, State) ->
 	end,
     case R of
 	{ok, S} ->
-	    {reply, ok, State#state{socket=S, status=?CONNECTING}};
+	    {reply, ok, State#state{socket=S, 
+				    status=?CONNECTING,
+				    response_connection=ResponseTo}};
 	Error->
 	    {reply, Error, State}
     end;
@@ -189,6 +192,7 @@ handle_info({http, Socket, http_eoh},State) ->
     case check_handshake_server_response(Headers) of
 	ok ->
 	    inet:setopts(Socket, [{packet, raw}]),
+	    State#state.response_connection ! {self(), connected},
 	    {noreply, State#state{status=?OPEN}};
 	_ ->
 	    {noreply, State#state{status=?CLOSED}}  
