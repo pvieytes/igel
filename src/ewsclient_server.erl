@@ -30,7 +30,6 @@
 -define(OPEN,1).
 -define(CLOSED,2).
 
-
 -record(callbacks, {on_msg=fun(Msg) -> 
 				   default_on_msg(Msg) 
 			   end}).
@@ -132,7 +131,7 @@ handle_call({send, Data}, _From, State) ->
 		case gen_tcp:send(State#state.socket, Message) of
 		    ok ->
 			ok;
-		    {error, Reason} = E ->
+		    {error, _Reason} = E ->
 			E
 		end;
 	    _ ->
@@ -251,12 +250,9 @@ code_change(_OldVsn, State, _Extra) ->
 default_on_msg(Msg) ->
     io:format("default on_msg :: receive: ~p~n", [Msg]).
 
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -278,10 +274,10 @@ parse_ws_url(WsUrl) ->
 	case string:tokens(Url, ":") of
 	    [Url] ->
 		case string:tokens(Url, "/") of
-		    [Dom|Rest] ->
-			{Dom, 80, Rest};
 		    [Dom] ->
-			{Dom, 80, []}
+			{Dom, 80, []};
+		    [Dom|Rest] ->
+			{Dom, 80, Rest}
 	       	end;
 	    [Dom, PortRest] ->
 		case string:tokens(PortRest, "/") of
@@ -299,7 +295,6 @@ parse_ws_url(WsUrl) ->
 	end,
     {Domain, Port, Path}.
 
-
 create_handshake_req(Host, Port, Path)->
     PortStr = io_lib:format("~p", [Port]),
      lists:flatten("GET " ++ Path ++ " HTTP/1.1\r\n" ++ 
@@ -310,7 +305,6 @@ create_handshake_req(Host, Port, Path)->
     		      "Sec-WebSocket-Key: vE6RKcwiuiUdNiF1Cpdz8Q==\r\n" ++
     		      "Sec-WebSocket-Version: 13\r\n" ++
     		      "\r\n").
-
 
 check_handshake_server_response(Headers)->
     Connection = proplists:get_value('Connection', Headers),
@@ -326,7 +320,6 @@ check_handshake_server_response(Headers)->
 	true ->
 	    error
     end.
-
 
 %%  0                   1                   2                   3
 %%  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
