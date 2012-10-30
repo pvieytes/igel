@@ -1,3 +1,11 @@
+%%%-------------------------------------------------------------------
+%%% @author Pablo Vieytes <mail@pablovieytes.com>
+%%% @copyright (C) 2012, Pablo Vieytes
+%%% @doc
+%%%
+%%% @end
+%%% Created : 30 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
+%%%-------------------------------------------------------------------
 
 -module(ewsclient_sup).
 
