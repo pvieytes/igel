@@ -17,6 +17,7 @@
 -export([start_link/1
 	 ]).
 
+%% Debug
 -compile([export_all]).
 
 %% gen_server callbacks
@@ -28,10 +29,19 @@
 -define(CONNECTING,0).
 -define(OPEN,1).
 -define(CLOSED,2).
--record(state, {socket,status=?CLOSED,headers=[],callback}).
 
 
-% macros
+-record(callbacks, {on_msg=fun(Msg) -> 
+				   default_on_msg(Msg) 
+			   end}).
+
+-record(state, {socket,
+		status=?CLOSED,
+		headers=[],
+		callbacks=#callbacks{}
+	       }).
+
+%% macros
 -define(OP_CONT, 0).
 -define(OP_TEXT, 1).
 -define(OP_BIN, 2).
@@ -112,14 +122,20 @@ handle_call({connect, Url}, _From, State) ->
     end;
 
 handle_call({send, Data}, _From, State) ->
-    Message = wsock_message:encode(Data, [mask, text]),
-    case gen_tcp:send(State#state.socket, Message) of
-	ok ->
-	    ok;
-	{error, Reason} ->
-	    io:format("dbg send error: ~p~n", [Reason])
-    end,
-    {reply, ok, State};
+    R = 
+	case State#state.status of
+	    ?OPEN ->
+		Message = wsock_message:encode(Data, [mask, text]),
+		case gen_tcp:send(State#state.socket, Message) of
+		    ok ->
+			ok;
+		    {error, Reason} = E ->
+			E
+		end;
+	    _ ->
+		{error, "ws is not connected"}
+	end,
+    {reply, R, State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -163,7 +179,7 @@ handle_info({http,Socket,{http_header, _, Name, _, Value}},State) ->
             {noreply,State1};
         undefined ->
             %% Bad state should have received response first
-            {stop,error,State}
+            {stop, error, State}
     end;
 
 %% Once we have all the headers, check for the 'Upgrade' flag 
@@ -173,23 +189,27 @@ handle_info({http, Socket, http_eoh},State) ->
     case check_handshake_server_response(Headers) of
 	ok ->
 	    inet:setopts(Socket, [{packet, raw}]),
-	    io:format("dbg connected~n");
+	    {noreply, State#state{status=?OPEN}};
 	_ ->
-	    io:format("dbg *NO* connected~n")
-    end,
-    {noreply, State};
-
+	    {noreply, State#state{status=?CLOSED}}  
+    end;
 
 %% Handshake complete, handle packets
 handle_info({tcp, _Socket, Data},State) ->
-    case  parse_received_data(Data) of
-        {?OP_TEXT, String}->
-            io:format("dbg received: ~p~n", [String]);
-	_Else ->
-	    io:format("dbg received: ~p~n", [_Else])
-    end,
-    {noreply, State};
-
+    case State#state.status of
+        ?OPEN ->
+	    case  parse_received_data(Data) of
+		{?OP_TEXT, String}->
+		    CallBacks = State#state.callbacks,
+		    OnMsg = CallBacks#callbacks.on_msg,
+		    OnMsg(String);
+		_Else ->
+		    io:format("dbg received: ~p~n", [_Else])
+	    end,
+	    {noreply, State};
+	_ ->
+	    {noreply, State#state{status=?CLOSED}}
+    end;
 
 handle_info(_Info, State) ->
     io:format("dbg received: ~p~n", [_Info]),
@@ -221,9 +241,16 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%%===================================================================
-%%% Internal functions
+%%% default callbacks
 %%%===================================================================
 
+default_on_msg(Msg) ->
+    io:format("default on_msg :: receive: ~p~n", [Msg]).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 
 
@@ -297,11 +324,6 @@ check_handshake_server_response(Headers)->
     end.
 
 
-
-
-
-
-
 %%  0                   1                   2                   3
 %%  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 %% +-+-+-+-+-------+-+-------------+-------------------------------+
@@ -324,7 +346,7 @@ check_handshake_server_response(Headers)->
 
 parse_received_data(<<1:1, 0:3, ?OP_TEXT:4, 0:1, Len:7, BData/binary>>) when Len < 126 ->
    {?OP_TEXT,  binary_to_list(BData)};
-parse_received_data(Bin) ->
+parse_received_data(_Bin) ->
     {error, "not implemented yet"}.
 
 

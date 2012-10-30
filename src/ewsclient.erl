@@ -14,7 +14,7 @@
 -export([start/0,
 	 start_client/0,
 	 start_client/1,
-	 connect_client/2,
+	 connect/2,
 	 send/2]).
 
 
@@ -63,7 +63,12 @@ start_client()->
 start_client(Params)->
     RandomId = now(),
     ChildSpec =  ?CHILD(RandomId, Params),
-    supervisor:start_child(ewsclient_sup, ChildSpec).
+    case supervisor:start_child(ewsclient_sup, ChildSpec) of
+	{ok, Pid}->
+	     {ok, {?MODULE, Pid}};
+	Error ->
+	    Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -74,8 +79,9 @@ start_client(Params)->
 %% @spec connect_client(Client::pid(), Url::string()) -> ok | {error, Error}
 %%
 %%--------------------------------------------------------------------
-connect_client(Client, Url) ->
-    gen_server:call(Client, {connect, Url}).
 
-send(Client, Data) ->
-    gen_server:call(Client, {send, Data}).  
+send(Data, {_Mod, WsClientPid}) ->
+    gen_server:call(WsClientPid, {send, Data}).  
+    
+connect(Url, {_Mod, WsClientPid}) ->
+    gen_server:call(WsClientPid, {connect, Url}).
