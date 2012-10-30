@@ -1,3 +1,6 @@
 $ cd /path/to/project/
 $ rebar compile
-$ erl  -pa ./ebin  -s ewsclient
+$ erl  -pa ./ebin -s ewsclient
+
+1> {ok, Client} = ewsclient:start_client().
+2> ewsclient:connect_client(Client, "ws://echo.websocket.org").
