@@ -6,4 +6,7 @@ clean:
 	rebar clean
 
 test: all
-	echo "test"
+	rebar compile
+	(cd test; erlc ewsclient_tests.erl)
+	erl -noshell -pa ebin -pa test -pa deps/wsock/ebin -s ewsclient_tests -s erlang halt
+

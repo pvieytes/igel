@@ -1,2 +1,3 @@
-/deps/wsock/
+deps/*
 ebin/*
+test/*beam
