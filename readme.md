@@ -1,4 +1,3 @@
-
 ## ewsclient 
 ewsclient is a websocket client written in erlang.
 
@@ -10,7 +9,7 @@ ewsclient is a websocket client written in erlang.
 
 
 ### Rebar
-This project use rebar to compile it. Please check how to use rebar.  https://github.com/basho/rebar
+This project uses rebar to compile it. Please, check how to use rebar on https://github.com/basho/rebar
 
 
 ### test 
@@ -29,7 +28,7 @@ $ rebar get-deps
 $ rebar compile
 $ erl  -pa ebin -pa deps/wsock/ebin  -s ewsclient
 ```
-
+erlang shell:
 
 ```erlang
 1> {ok, Ws} = ewsclient:start_client().
