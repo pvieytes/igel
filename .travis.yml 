@@ -1,0 +1,5 @@
+language: erlang
+otp_release:
+   - R14B04
+  
+script: "make test"
