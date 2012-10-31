@@ -27,7 +27,7 @@ Start erlang and ewsclient.
 $ cd /path/to/project/
 $ rebar get-deps
 $ rebar compile
-$ erl  -pa ./ebin -s ewsclient
+$ erl  -pa ebin -pa deps/wsock/ebin  -s ewsclient
 ```
 
 
