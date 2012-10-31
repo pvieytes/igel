@@ -14,6 +14,8 @@
 -export([start/0,
 	 start_client/0,
 	 start_client/1,
+	 close_client/1,
+	 disconnect/1,
 	 connect/2,
 	 send/2,
 	 override_callback/2]).
@@ -72,27 +74,74 @@ start_client(Params)->
     end.
 
 
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Close the client
+%%
+%% @spec close_client({Module::atom(), WsClienPidt::pid()}) -> ok
+%%
+%%--------------------------------------------------------------------
+close_client({_Mod, WsClientPid})->
+    gen_server:call(WsClientPid, close).  
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Connect the client
 %%
-%% @spec connect_client(Client::pid(), Url::string()) -> ok | {error, Error}
+%% @spec connect(Url::string(), {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
 %%
 %%--------------------------------------------------------------------
+connect(Url, {_Mod, WsClientPid}) ->
+    ResponseTo = self(),
+   case gen_server:call(WsClientPid, {connect, Url, ResponseTo}) of
+       ok ->
+	   receive
+	       {WsClientPid, connected} ->
+		   ok
+	   after 5000 ->
+		   {error, "time out"}
+	   end;
+       Error ->
+	   Error
+   end.
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Disconnect the client
+%%
+%% @spec disconnect({Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%%
+%%--------------------------------------------------------------------
+disconnect({_Mod, WsClientPid}) ->
+    gen_server:call(WsClientPid, disconnect).  
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% send data
+%%
+%% @spec send(Dataa::string, {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%%
+%%--------------------------------------------------------------------
 send(Data, {_Mod, WsClientPid}) ->
     gen_server:call(WsClientPid, {send, Data}).  
 
-connect(Url, {_Mod, WsClientPid}) ->
-    ResponseTo = self(),
-    gen_server:call(WsClientPid, {connect, Url, ResponseTo}),
-    receive
-	{WsClientPid, connected} ->
-	    ok
-    after 5000 ->
-	    {error, "time out"}
-    end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Override the callback
+%%
+%% @spec override_callback({CbKey::atom(), Fun::fun()}, {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%%
+%%--------------------------------------------------------------------
 override_callback(CallbackInfo, {_Mod, WsClientPid}) ->
     gen_server:call(WsClientPid, {override_callback, CallbackInfo}).

@@ -99,29 +99,52 @@ init(_Params) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({connect, Url, ResponseTo}, _From, State) ->
-    R =
-	case parse_ws_url(Url) of
-	    error -> 
-		{error, "url is not valid"};
-	    {Host, Port, Path} ->  
-		case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
-		    {ok, Sock} ->
-			Request = create_handshake_req(Host, Port, Path),
-			ok = gen_tcp:send(Sock,Request),
-			inet:setopts(Sock, [{packet, http}]),
-			{ok, Sock};
-		    _Error ->
-			{error,"Host does not response"}
-		end
-	end,
-    case R of
-	{ok, S} ->
-	    {reply, ok, State#state{socket=S, 
-				    status=?CONNECTING,
-				    response_connection=ResponseTo}};
-	Error->
-	    {reply, Error, State}
+    case State#state.status of
+	?CLOSED ->
+	    R =
+		case parse_ws_url(Url) of
+		    error -> 
+			{error, "url is not valid"};
+		    {Host, Port, Path} ->  
+			case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
+			    {ok, Sock} ->
+				Request = create_handshake_req(Host, Port, Path),
+				ok = gen_tcp:send(Sock,Request),
+				inet:setopts(Sock, [{packet, http}]),
+				{ok, Sock};
+			    TcpError ->
+				{error, TcpError}
+			end
+		end,
+	    case R of
+		{ok, S} ->
+		    {reply, ok, State#state{socket=S, 
+					    status=?CONNECTING,
+					    response_connection=ResponseTo}};
+		Error->
+		    {reply, Error, State}
+	    end;
+	?CONNECTING ->
+	    {reply,
+	     {error, "client is connecting, please wait"},
+	     State};
+	?OPEN ->
+	    {reply,
+	     {error, "client is already connect"},
+	     State}
     end;
+
+handle_call(disconnect, _From, State) ->
+    case  State#state.status of
+	?CLOSED ->
+	    R = {error, "client is not connected"},
+	    {reply, R, State};
+	_status ->
+	    Socket = State#state.socket,
+	    gen_tcp:close(Socket),
+	    {reply, ok, State#state{status=?CLOSED,
+				    headers=[]}}
+    end;    
 
 handle_call({send, Data}, _From, State) ->
     R = 
@@ -147,8 +170,11 @@ handle_call({override_callback, {Type, Fun}}, _From, State) ->
 	    NewCallBacks = Callbacks#callbacks{on_msg=Fun},
 	    {reply, ok, State#state{callbacks=NewCallBacks}};
 	_ ->
-	    {reply, error, State}
+	    {reply, {error, "callback key not valid", State}}
     end;
+
+handle_call(stop, _From, State) ->
+    {stop, ignore, ok, State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
