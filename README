@@ -3,6 +3,6 @@ $ rebar get-deps
 $ rebar compile
 $ erl -pa ./ebin -pa deps/wsock/ebin -s ewsclient
 
-1> {ok, Client} = ewsclient:start_client().
-2> ewsclient:connect_client(Client, "ws://echo.websocket.org").
-3> ewsclient:send(Client, "lajsdf").
+1> {ok, Ws} = ewsclient:start_client().
+2> Ws:connect("ws://echo.websocket.org").
+3> Ws:send("data string").

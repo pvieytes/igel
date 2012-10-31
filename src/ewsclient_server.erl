@@ -319,11 +319,13 @@ create_handshake_req(Host, Port, Path)->
 
 check_handshake_server_response(Headers)->
     Connection = proplists:get_value('Connection', Headers),
-    if 
-	Connection == "Upgrade" ->
+    ConnectionLower = string:to_lower(Connection),
+    if
+	ConnectionLower == "upgrade" ->
 	    Upgrade = proplists:get_value('Upgrade', Headers),
+	    UpgradeLower = string:to_lower(Upgrade),
 	    if 
-		Upgrade == "WebSocket" ->
+		UpgradeLower == "websocket" ->
 		    ok;
 		true ->
 		    error
