@@ -9,9 +9,9 @@
 
 -module(ewsclient_server).
 
--behaviour(gen_server).
+-include_lib("ewsclient/include/ewsclient.hrl").
 
--include_lib("wsock/include/wsock.hrl").
+-behaviour(gen_server).
 
 %% API
 -export([start_link/1
@@ -24,32 +24,20 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
+%% State
 %% Ready States
-
 -define(CONNECTING,0).
 -define(OPEN,1).
 -define(CLOSED,2).
-
 -record(callbacks, {on_msg=fun(Msg) -> 
 				   default_on_msg(Msg) 
 			   end}).
-
 -record(state, {socket,
 		status=?CLOSED,
 		headers=[],
 		callbacks=#callbacks{},
 		response_connection
 	       }).
-
-%% macros
--define(OP_CONT, 0).
--define(OP_TEXT, 1).
--define(OP_BIN, 2).
--define(OP_CLOSE, 8).
--define(OP_PING, 9).
--define(OP_PONG, 10).
-
--define(FRAGMENT_SIZE, 4096).
 
 
 %%%===================================================================
@@ -108,7 +96,7 @@ handle_call({connect, Url, ResponseTo}, _From, State) ->
 		    {Host, Port, Path} ->  
 			case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
 			    {ok, Sock} ->
-				Request = create_handshake_req(Host, Port, Path),
+				Request = ewsclient_ws13:create_handshake_req(Host, Port, Path),
 				ok = gen_tcp:send(Sock,Request),
 				inet:setopts(Sock, [{packet, http}]),
 				{ok, Sock};
@@ -161,7 +149,6 @@ handle_call({send, Data}, _From, State) ->
 		{error, "ws is not connected"}
 	end,
     {reply, R, State};
-
 
 handle_call({override_callback, {Type, Fun}}, _From, State) ->
     Callbacks = State#state.callbacks,
@@ -225,7 +212,7 @@ handle_info({http,Socket,{http_header, _, Name, _, Value}},State) ->
 handle_info({http, Socket, http_eoh},State) ->
     %% Validate headers, set state, change packet type back to raw
     Headers = State#state.headers, 
-    case check_handshake_server_response(Headers) of
+    case ewsclient_ws13:check_handshake_server_response(Headers) of
 	ok ->
 	    inet:setopts(Socket, [{packet, raw}]),
 	    State#state.response_connection ! {self(), connected},
@@ -238,7 +225,7 @@ handle_info({http, Socket, http_eoh},State) ->
 handle_info({tcp, _Socket, Data},State) ->
     case State#state.status of
         ?OPEN ->
-	    case  parse_received_data(Data) of
+	    case ewsclient_ws13:parse_received_data(Data) of
 		{?OP_TEXT, String}->
 		    CallBacks = State#state.callbacks,
 		    OnMsg = CallBacks#callbacks.on_msg,
@@ -331,62 +318,4 @@ parse_ws_url(WsUrl) ->
 		"/" ++ string:join(PathList, "/")
 	end,
     {Domain, Port, Path}.
-
-create_handshake_req(Host, Port, Path)->
-    PortStr = io_lib:format("~p", [Port]),
-     lists:flatten("GET " ++ Path ++ " HTTP/1.1\r\n" ++ 
-    		      "Upgrade: WebSocket\r\n" ++
-    		      "Connection: Upgrade\r\n" ++
-    		      "Host: " ++ Host ++ ":" ++ PortStr ++ "\r\n" ++
-    		      "Origin: " ++ Host ++ ":" ++ PortStr ++ "\r\n" ++
-    		      "Sec-WebSocket-Key: vE6RKcwiuiUdNiF1Cpdz8Q==\r\n" ++
-    		      "Sec-WebSocket-Version: 13\r\n" ++
-    		      "\r\n").
-
-check_handshake_server_response(Headers)->
-    Connection = proplists:get_value('Connection', Headers),
-    ConnectionLower = string:to_lower(Connection),
-    if
-	ConnectionLower == "upgrade" ->
-	    Upgrade = proplists:get_value('Upgrade', Headers),
-	    UpgradeLower = string:to_lower(Upgrade),
-	    if 
-		UpgradeLower == "websocket" ->
-		    ok;
-		true ->
-		    error
-	    end;
-	true ->
-	    error
-    end.
-
-%%  0                   1                   2                   3
-%%  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-%% +-+-+-+-+-------+-+-------------+-------------------------------+
-%% |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
-%% |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
-%% |N|V|V|V|       |S|             |   (if payload len==126/127)   |
-%% | |1|2|3|       |K|             |                               |
-%% +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
-%% |     Extended payload length continued, if payload len == 127  |
-%% + - - - - - - - - - - - - - - - +-------------------------------+
-%% |                               |Masking-key, if MASK set to 1  |
-%% +-------------------------------+-------------------------------+
-%% | Masking-key (continued)       |          Payload Data         |
-%% +-------------------------------- - - - - - - - - - - - - - - - +
-%% :                     Payload Data continued ...                :
-%% + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
-%% |                     Payload Data continued ...                |
-%% +---------------------------------------------------------------+
-
-
-parse_received_data(<<1:1, 0:3, ?OP_TEXT:4, 0:1, Len:7, BData/binary>>) when Len < 126 ->
-   {?OP_TEXT,  binary_to_list(BData)};
-parse_received_data(_Bin) ->
-    {error, "not implemented yet"}.
-
-
-
-
-
 
