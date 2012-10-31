@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 
 -module(ewsclient_ws13).
--include_lib("ewsclient/include/ewsclient.hrl").
+-include("include/ewsclient.hrl").
 -include_lib("wsock/include/wsock.hrl").
 
 

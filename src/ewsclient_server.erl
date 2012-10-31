@@ -9,7 +9,7 @@
 
 -module(ewsclient_server).
 
--include_lib("ewsclient/include/ewsclient.hrl").
+-include_lib("include/ewsclient.hrl").
 
 -behaviour(gen_server).
 
