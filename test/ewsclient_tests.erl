@@ -15,6 +15,39 @@ start() ->
 
 
 echo_websocket_org_test() ->
+    Host = "echo.websocket.org",
     ?debugMsg("echo.websocket.org tests"),
-    ?assertMatch(true, true).
+    ws_test_funs(Host).
+    
 
+
+ws_test_funs(Host) ->
+    ?assertException(_ClassPattern, _TermPattern, ewsclient:start_client()),
+    ?assertMatch(ok, ewsclient:start()),
+    Started =  ewsclient:start_client(),
+    ?assertMatch({ok, Ws}, Started),
+    {ok, Ws} = Started,
+    ?assertMatch({error, _}, Ws:send("test")),
+    ?assertMatch(ok, Ws:connect(Host)),
+    ?assertMatch({error,_}, Ws:connect(Host)),
+    TestProcessPid = self(),
+    FOnMsg =fun (Msg) -> TestProcessPid !  Msg end,
+    ?assertMatch(ok, Ws:override_callback({on_msg, FOnMsg})),
+    Text = "tessssst",
+    ?assertMatch(ok, Ws:send(Text)),
+    Received =get_mailbox(),
+    ?assertMatch(Text, Received),
+    ?assertMatch(ok, Ws:disconnect()),
+    ?assertMatch({error,_}, Ws:disconnect()).
+
+
+    
+
+
+get_mailbox()->
+    receive
+	R ->
+	    R
+    after 5000 ->
+	    timeout
+    end.

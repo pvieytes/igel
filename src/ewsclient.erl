@@ -70,7 +70,7 @@ start_client(Params)->
 	{ok, Pid}->
 	     {ok, {?MODULE, Pid}};
 	Error ->
-	    Error
+	    {error, Error}
     end.
 
 

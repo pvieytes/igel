@@ -231,7 +231,8 @@ handle_info({tcp, _Socket, Data},State) ->
 		    OnMsg = CallBacks#callbacks.on_msg,
 		    OnMsg(String);
 		_Else ->
-		    io:format("dbg received: ~p~n", [_Else])
+		    %%TODO on_error
+		    io:format("dbg tcp received: ~p~n", [_Else])
 	    end,
 	    {noreply, State};
 	_ ->
@@ -239,7 +240,7 @@ handle_info({tcp, _Socket, Data},State) ->
     end;
 
 handle_info(_Info, State) ->
-    io:format("dbg received: ~p~n", [_Info]),
+    io:format("dbg handle info received: ~p~n", [_Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
