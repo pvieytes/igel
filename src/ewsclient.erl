@@ -44,9 +44,9 @@ start()->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% start ewsclient application
+%% start ewsclient client
 %%
-%% @spec start() -> {ok, pid()} | {error, Error}
+%% @spec start_client() -> {ok, pid()} | {error, Error}
 %%
 %% @end
 %%--------------------------------------------------------------------
@@ -57,11 +57,12 @@ start_client()->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% start ewsclient application
+%% start ewsclient client
 %%
-%% @spec start(Params::[{CallBack::callback(), Fun::fun()}]) -> {ok, pid()} | {error, Error}
+%% @spec start_client(List::[Element::element()]) -> {ok, pid()} | {error, Error}
 %%
-%%  callback() = on_open | on_error | on_message | on_close
+%% element() == {connect , Url::string()} | {callbacks, [{callback(), Fun::fun()}]}
+%% callback() = on_open | on_error | on_message | on_close
 %%--------------------------------------------------------------------
 start_client(Params)->
     RandomId = now(),
@@ -72,8 +73,6 @@ start_client(Params)->
 	Error ->
 	    {error, Error}
     end.
-
-
 
 
 %%--------------------------------------------------------------------
@@ -98,18 +97,17 @@ close_client({_Mod, WsClientPid})->
 %%--------------------------------------------------------------------
 connect(Url, {_Mod, WsClientPid}) ->
     ResponseTo = self(),
-   case gen_server:call(WsClientPid, {connect, Url, ResponseTo}) of
-       ok ->
-	   receive
-	       {WsClientPid, connected} ->
-		   ok
-	   after 5000 ->
-		   {error, "time out"}
-	   end;
-       Error ->
-	   Error
-   end.
-
+    case gen_server:call(WsClientPid, {connect, Url, ResponseTo}) of
+	ok ->
+	    receive
+		{WsClientPid, connected} ->
+		    ok
+	    after 5000 ->
+		    {error, "time out"}
+	    end;
+	Error ->
+	    Error
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -140,16 +138,11 @@ send(Data, {_Mod, WsClientPid}) ->
 %% @doc
 %% Override the callback
 %%
-%% @spec override_callback({CbKey::atom(), Fun::fun()}, {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%% @spec override_callback(CallbackInfo::callbackinfo(), {Module::atom(), WsClienPidt::pid()}) -> 
+%%               ok | {error, Error}
 %%
+%% callbackinfo() = {CbKey::atom(), Fun::fun()} | [{CbKey::atom(), Fun::fun()}]
 %% callback() = on_open | on_error | on_message | on_close
 %%--------------------------------------------------------------------
-override_callback(CallbackInfoList, {Mod, WsClientPid}) when is_list(CallbackInfoList) ->
-    lists:foreach(
-      fun(CallbackInfo) ->
-	      override_callback(CallbackInfo, {Mod, WsClientPid}) 
-      end,
-      CallbackInfoList);
-
 override_callback(CallbackInfo, {_Mod, WsClientPid}) ->
     gen_server:call(WsClientPid, {override_callback, CallbackInfo}).

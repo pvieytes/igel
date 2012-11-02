@@ -80,8 +80,28 @@ start_link(Params) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init(_Params) ->
-    {ok, #state{}}.
+init(Params) ->
+    State= 
+	case proplists:get_value(callbacks, Params) of
+	    undefined ->  #state{};
+	    Callbacks ->
+		lists:foldl(
+		  fun({CbKey, Callback}, StateAcc) ->
+			case override_callback(CbKey, Callback, StateAcc) of
+			    error -> StateAcc;
+			    State -> State
+			end
+		  end,
+		  #state{},
+		  Callbacks)
+	end,
+    case proplists:get_value(connect, Params) of
+	undefined ->ok;
+	Url ->
+	    Server = self(),
+	    spawn(fun() -> gen_server:call(Server, {connect, Url, self()}) end)
+    end,
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -167,24 +187,39 @@ handle_call({send, Data}, _From, State) ->
 	end,
     {reply, R, State};
 
-handle_call({override_callback, {Type, Fun}}, _From, State) ->
-    Index = 
-	case Type of
-	    on_open -> #callbacks.on_open;
-	    on_msg -> #callbacks.on_msg;
-	    on_error -> #callbacks.on_error;
-	    on_close -> #callbacks.on_close;
-	    _ -> error
+handle_call({override_callback, CallbackInfo}, _From, State) ->
+    {Error, NewState} = 
+	case CallbackInfo of
+	    CallbackInfo when is_list(CallbackInfo) ->
+		lists:foldl(
+		  fun({CbKey, CallBack}, {ErrorAcc, StateAcc}) ->
+			  case override_callback(CbKey, CallBack, StateAcc) of
+			      error -> 
+				  E = ErrorAcc ++ 
+				      lists:flatten(io_lib:format("~s is not a callback; ", [CbKey])),
+				  {E, StateAcc};
+			      NState ->
+				  {ErrorAcc, NState}
+			  end
+		  end,
+		  {"", State},
+		  CallbackInfo);
+	    {CbKey, CallBack} ->
+		case override_callback(CbKey, CallBack, State) of
+		    error -> 
+			{lists:flatten(io_lib:format("~s is not a callback; ", [CbKey])),
+			 State};
+		    NState ->
+			{"", NState}
+		end
 	end,
-    case Index of
-	error ->
-	    {reply, {error, "callback key not valid", State}};
-	Index ->
-	    Callbacks = State#state.callbacks,
-	    NewCallBacks = erlang:setelement(Index, Callbacks, Fun),
-	    {reply, ok, State#state{callbacks=NewCallBacks}}
-    end;	       
-
+    case Error of
+	"" ->
+	    {reply, ok, NewState};
+	Error ->
+	    {reply, {error, Error}, NewState}
+    end;
+	
 handle_call(stop, _From, State) ->
     {stop, ignore, ok, State};
 
@@ -317,6 +352,37 @@ default_on_close() ->
 %%% Internal functions
 %%%===================================================================
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% override a callback
+%%
+%% @spec override_callback(CbKey::atom(), CallBack::fun(), State::#state) ->
+%%  NewState::#state | error
+%% @end
+%%--------------------------------------------------------------------
+override_callback(CbKey, Callback, State) ->
+    Index = 
+	case CbKey of
+	    on_open -> #callbacks.on_open;
+	    on_msg -> #callbacks.on_msg;
+	    on_error -> #callbacks.on_error;
+	    on_close -> #callbacks.on_close;
+	    _ -> error
+	end,
+    case Index of
+	error -> error;
+	Index ->
+	    Callbacks = State#state.callbacks,
+	    NewCallBacks = erlang:setelement(Index, Callbacks, Callback),
+	     State#state{callbacks=NewCallBacks}
+    end.	       
+
+
+
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -357,4 +423,7 @@ parse_ws_url(WsUrl) ->
 		"/" ++ string:join(PathList, "/")
 	end,
     {Domain, Port, Path}.
+
+
+
 

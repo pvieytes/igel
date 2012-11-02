@@ -22,29 +22,57 @@ echo_websocket_org_test() ->
 
 
 ws_test_funs(Host) ->
+    %% start client without start the app
     ?assertException(_ClassPattern, _TermPattern, ewsclient:start_client()),
+    
+    %% start app
     ?assertMatch(ok, ewsclient:start()),
-    Started =  ewsclient:start_client(),
-    ?assertMatch({ok, Ws}, Started),
-    {ok, Ws} = Started,
+    
+    %% start client
+    WsStarted =  ewsclient:start_client(),
+    ?assertMatch({ok, _Ws}, WsStarted),
+    {ok, Ws} = WsStarted,
     ?assertMatch({error, _}, Ws:send("test")),
-    ?assertMatch(ok, Ws:connect(Host)),
-    ?assertMatch({error,_}, Ws:connect(Host)),
+    
+    %% override callbacks
     TestProcessPid = self(),
-    FOnMsg =fun (Msg) -> TestProcessPid !  Msg end,
-    ?assertMatch(ok, Ws:override_callback({on_msg, FOnMsg})),
+    FMirror =fun (Msg) -> TestProcessPid !  Msg end,
+    ?assertMatch(ok, Ws:override_callback({on_msg, FMirror})),
+    FOnclose = fun () ->  TestProcessPid ! closed end,
+    ?assertMatch(ok, Ws:override_callback([{on_close, FOnclose}])),
+    FOnOpen =  fun () ->  TestProcessPid ! open end,
+    ?assertMatch(ok, Ws:override_callback({on_open, FOnOpen})),
+
+    %% connect
+    ?assertMatch(ok, Ws:connect(Host)),
+    ?assertMatch(open, read_mailbox()),
+    ?assertMatch({error,_}, Ws:connect(Host)),
+   
+    %%send msgs
     Text = "test",
     ?assertMatch(ok, Ws:send(Text)),
-    Received =get_mailbox(),
-    ?assertMatch(Text, Received),
+    ?assertMatch(Text, read_mailbox()),
+
+    %% disconnect
     ?assertMatch(ok, Ws:disconnect()),
-    ?assertMatch({error,_}, Ws:disconnect()).
+    ?assertMatch(closed, read_mailbox()),
+    ?assertMatch({error,_}, Ws:disconnect()),
+
+    %% start client with params
+    Parmas = [{connect, "ws://echo.websocket.org"},
+	      {callbacks, 
+	       [
+		{on_open, FOnOpen},
+		{on_close, FOnclose},
+		{on_msg, FMirror}
+	       ]}
+	     ],
+    Ws2Started = ewsclient:start_client(Parmas),
+    ?assertMatch({ok, _Ws2}, Ws2Started),
+    ?assertMatch(open, read_mailbox()).
 
 
-    
-
-
-get_mailbox()->
+read_mailbox()->
     receive
 	R ->
 	    R
