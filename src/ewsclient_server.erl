@@ -47,7 +47,7 @@
 		status=?CLOSE,
 		headers=[],
 		callbacks=#callbacks{},
-		response_connection
+		connection_resp
 	       }).
 
 
@@ -81,6 +81,7 @@ start_link(Params) ->
 %% @end
 %%--------------------------------------------------------------------
 init(Params) ->
+    From = proplists:get_value(from, Params),
     State= 
 	case proplists:get_value(callbacks, Params) of
 	    undefined ->  #state{};
@@ -96,12 +97,14 @@ init(Params) ->
 		  Callbacks)
 	end,
     case proplists:get_value(connect, Params) of
-	undefined ->ok;
+	undefined ->
+	    gen_server:cast(ewsclient, {started, From, self()}),
+	    {ok, State};
 	Url ->
 	    Server = self(),
-	    spawn(fun() -> gen_server:call(Server, {connect, Url, self()}) end)
-    end,
-    {ok, State}.
+	    spawn(fun() -> gen_server:call(Server, {connect, Url, from_start}) end),
+	    {ok, State#state{connection_resp={started, From, self()}}}
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -117,7 +120,7 @@ init(Params) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({connect, Url, ResponseTo}, _From, State) ->
+handle_call({connect, Url, ConnectionResponse}, _From, State) ->
     case State#state.status of
 	?CLOSE ->
 	    R =
@@ -139,10 +142,17 @@ handle_call({connect, Url, ResponseTo}, _From, State) ->
 			end
 		end,
 	    case R of
-		{ok, S} ->
-		    {reply, ok, State#state{socket=S, 
-					    status=?CONNECTING,
-					    response_connection=ResponseTo}};
+		{ok, Socket} ->
+		    NewConnectionResp = 
+			case ConnectionResponse of
+			    from_start ->
+				State#state.connection_resp;
+			    {from_connect, From} ->
+				{connected, From}
+			end,
+		    {reply, waiting, State#state{socket=Socket, 
+					  status=?CONNECTING,
+					  connection_resp=NewConnectionResp}};
 		Error->
 		    {reply, Error, State}
 	    end;
@@ -220,7 +230,7 @@ handle_call({override_callback, CallbackInfo}, _From, State) ->
 	    {reply, {error, Error}, NewState}
     end;
 	
-handle_call(stop, _From, State) ->
+handle_call(close, _From, State) ->
     {stop, ignore, ok, State};
 
 handle_call(_Request, _From, State) ->
@@ -275,9 +285,13 @@ handle_info({http, Socket, http_eoh},State) ->
     case ewsclient_ws13:check_handshake_server_response(Headers) of
 	ok ->
 	    inet:setopts(Socket, [{packet, raw}]),
-	    State#state.response_connection ! {self(), connected},
+	    ConnectioResp = State#state.connection_resp,
+	    gen_server:cast(ewsclient, ConnectioResp),
 	    {noreply, State#state{status=?OPEN}};
 	_ ->
+	    CallBacks = State#state.callbacks,
+	    OnError = CallBacks#callbacks.on_error,
+	    OnError(),
 	    {noreply, State#state{status=?CLOSE}}  
     end;
 
