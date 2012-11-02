@@ -15,7 +15,7 @@
 
 %% API
 -export([start_link/1
-	 ]).
+	]).
 
 %% Debug
 -compile([export_all]).
@@ -28,12 +28,23 @@
 %% Ready States
 -define(CONNECTING,0).
 -define(OPEN,1).
--define(CLOSED,2).
--record(callbacks, {on_msg=fun(Msg) -> 
-				   default_on_msg(Msg) 
-			   end}).
+-define(CLOSE,2).
+-record(callbacks, {
+	  on_open=fun() ->
+			  default_on_open()
+		  end,	 
+	  on_msg=fun(Msg) -> 
+			 default_on_msg(Msg) 
+		 end,
+	  on_error=fun() ->
+			   default_on_error()
+		   end,
+	  on_close=fun() ->
+			   default_on_close()
+		   end
+	 }).
 -record(state, {socket,
-		status=?CLOSED,
+		status=?CLOSE,
 		headers=[],
 		callbacks=#callbacks{},
 		response_connection
@@ -88,7 +99,7 @@ init(_Params) ->
 %%--------------------------------------------------------------------
 handle_call({connect, Url, ResponseTo}, _From, State) ->
     case State#state.status of
-	?CLOSED ->
+	?CLOSE ->
 	    R =
 		case parse_ws_url(Url) of
 		    error -> 
@@ -99,6 +110,9 @@ handle_call({connect, Url, ResponseTo}, _From, State) ->
 				Request = ewsclient_ws13:create_handshake_req(Host, Port, Path),
 				ok = gen_tcp:send(Sock,Request),
 				inet:setopts(Sock, [{packet, http}]),
+				CallBacks = State#state.callbacks,
+				OnOpen = CallBacks#callbacks.on_open,
+				OnOpen(),
 				{ok, Sock};
 			    TcpError ->
 				{error, TcpError}
@@ -124,13 +138,16 @@ handle_call({connect, Url, ResponseTo}, _From, State) ->
 
 handle_call(disconnect, _From, State) ->
     case  State#state.status of
-	?CLOSED ->
+	?CLOSE ->
 	    R = {error, "client is not connected"},
 	    {reply, R, State};
 	_status ->
 	    Socket = State#state.socket,
 	    gen_tcp:close(Socket),
-	    {reply, ok, State#state{status=?CLOSED,
+	    CallBacks = State#state.callbacks,
+	    OnClose = CallBacks#callbacks.on_close,
+	    OnClose(),
+	    {reply, ok, State#state{status=?CLOSE,
 				    headers=[]}}
     end;    
 
@@ -151,14 +168,22 @@ handle_call({send, Data}, _From, State) ->
     {reply, R, State};
 
 handle_call({override_callback, {Type, Fun}}, _From, State) ->
-    Callbacks = State#state.callbacks,
-    case Type of
-	on_msg ->
-	    NewCallBacks = Callbacks#callbacks{on_msg=Fun},
-	    {reply, ok, State#state{callbacks=NewCallBacks}};
-	_ ->
-	    {reply, {error, "callback key not valid", State}}
-    end;
+    Index = 
+	case Type of
+	    on_open -> #callbacks.on_open;
+	    on_msg -> #callbacks.on_msg;
+	    on_error -> #callbacks.on_error;
+	    on_close -> #callbacks.on_close;
+	    _ -> error
+	end,
+    case Index of
+	error ->
+	    {reply, {error, "callback key not valid", State}};
+	Index ->
+	    Callbacks = State#state.callbacks,
+	    NewCallBacks = erlang:setelement(Index, Callbacks, Fun),
+	    {reply, ok, State#state{callbacks=NewCallBacks}}
+    end;	       
 
 handle_call(stop, _From, State) ->
     {stop, ignore, ok, State};
@@ -218,7 +243,7 @@ handle_info({http, Socket, http_eoh},State) ->
 	    State#state.response_connection ! {self(), connected},
 	    {noreply, State#state{status=?OPEN}};
 	_ ->
-	    {noreply, State#state{status=?CLOSED}}  
+	    {noreply, State#state{status=?CLOSE}}  
     end;
 
 %% Handshake complete, handle packets
@@ -231,12 +256,13 @@ handle_info({tcp, _Socket, Data},State) ->
 		    OnMsg = CallBacks#callbacks.on_msg,
 		    OnMsg(String);
 		_Else ->
-		    %%TODO on_error
-		    io:format("dbg tcp received: ~p~n", [_Else])
+		    CallBacks = State#state.callbacks,
+		    OnError = CallBacks#callbacks.on_error,
+		    OnError()
 	    end,
 	    {noreply, State};
 	_ ->
-	    {noreply, State#state{status=?CLOSED}}
+	    {noreply, State#state{status=?CLOSE}}
     end;
 
 handle_info(_Info, State) ->
@@ -272,8 +298,20 @@ code_change(_OldVsn, State, _Extra) ->
 %%% default callbacks
 %%%===================================================================
 
+default_on_open()->
+    io:format("default on_open.~n").
+
 default_on_msg(Msg) ->
     io:format("default on_msg :: receive: ~p~n", [Msg]).
+
+default_on_error()->
+    io:format("default on_error.~n").
+
+default_on_close() ->
+    io:format("default on_close.~n").
+
+
+
 
 %%%===================================================================
 %%% Internal functions

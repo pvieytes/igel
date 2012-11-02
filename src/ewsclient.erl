@@ -61,7 +61,7 @@ start_client()->
 %%
 %% @spec start(Params::[{CallBack::callback(), Fun::fun()}]) -> {ok, pid()} | {error, Error}
 %%
-%%  callback() = on_open | on_error | on_message | on_closed
+%%  callback() = on_open | on_error | on_message | on_close
 %%--------------------------------------------------------------------
 start_client(Params)->
     RandomId = now(),
@@ -142,6 +142,14 @@ send(Data, {_Mod, WsClientPid}) ->
 %%
 %% @spec override_callback({CbKey::atom(), Fun::fun()}, {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
 %%
+%% callback() = on_open | on_error | on_message | on_close
 %%--------------------------------------------------------------------
+override_callback(CallbackInfoList, {Mod, WsClientPid}) when is_list(CallbackInfoList) ->
+    lists:foreach(
+      fun(CallbackInfo) ->
+	      override_callback(CallbackInfo, {Mod, WsClientPid}) 
+      end,
+      CallbackInfoList);
+
 override_callback(CallbackInfo, {_Mod, WsClientPid}) ->
     gen_server:call(WsClientPid, {override_callback, CallbackInfo}).
