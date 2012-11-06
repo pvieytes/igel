@@ -13,21 +13,34 @@
 start() ->
     eunit:test(ewsclient).
 
-
 echo_websocket_org_test() ->
-    Host = "echo.websocket.org",
-    ?debugMsg("echo.websocket.org tests"),
-    ws_test_funs(Host).
-    
+    %%start ewsclient app
+    app_test_funs(),
+
+    %% ws client test functions
+    ws_test_funs("ws://echo.websocket.org"),
+
+    %% start local websocket sever
+    wstestserver:start(),
+
+    %% ws client test functions
+    ws_test_funs("ws://localhost:8080/websocket").
 
 
-ws_test_funs(Host) ->
+app_test_funs() ->
     %% start client without start the app
     ?assertException(_ClassPattern, _TermPattern, ewsclient:start_client()),
     
-    %% start app
-    ?assertMatch(ok, ewsclient:start()),
-    
+    %% start ewsclient app
+    ewsclient:start().
+
+
+
+ws_test_funs(Host) ->
+  
+    %% websocket test funs
+    ?debugMsg("Host: " ++ Host),
+ 
     %% start client
     WsStarted =  ewsclient:start_client(),
     ?assertMatch({ok, _Ws}, WsStarted),
@@ -59,17 +72,21 @@ ws_test_funs(Host) ->
     ?assertMatch({error,_}, Ws:disconnect()),
 
     %% start client with params
-    Parmas = [{connect, "ws://echo.websocket.org"},
-	      {callbacks, 
-	       [
-		{on_open, FOnOpen},
-		{on_close, FOnclose},
-		{on_msg, FMirror}
-	       ]}
-	     ],
+    Parmas = [{connect, Host},
+    	      {callbacks, 
+    	       [
+    		{on_open, FOnOpen},
+    		{on_close, FOnclose},
+    		{on_msg, FMirror}
+    	       ]}
+    	     ],
     Ws2Started = ewsclient:start_client(Parmas),
     ?assertMatch({ok, _Ws2}, Ws2Started),
     ?assertMatch(open, read_mailbox()).
+   
+
+
+
 
 
 read_mailbox()->
