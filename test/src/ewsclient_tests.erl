@@ -85,10 +85,6 @@ ws_test_funs(Host) ->
     ?assertMatch(open, read_mailbox()).
    
 
-
-
-
-
 read_mailbox()->
     receive
 	R ->

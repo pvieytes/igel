@@ -19,52 +19,115 @@ init({_Any, http}, Req, []) ->
 	end.
 
 handle(Req, State) ->
-	{ok, Req2} = cowboy_http_req:reply(200, [{'Content-Type', <<"text/html">>}],
-%% HTML code taken from misultin's example file.
-<<"<html>
-<head>
-<script type=\"text/javascript\">
-function addStatus(text){
-	var date = new Date();
-	document.getElementById('status').innerHTML
-		= document.getElementById('status').innerHTML
-		+ date + \": \" + text + \"<br/>\";
-}
-function ready(){
-	if (\"MozWebSocket\" in window) {
-		WebSocket = MozWebSocket;
-	}
-	if (\"WebSocket\" in window) {
-		// browser supports websockets
-		var ws = new WebSocket(\"ws://localhost:8080/websocket\");
-		ws.onopen = function() {
-			// websocket is connected
-			addStatus(\"websocket connected!\");
-			// send hello data to server.
-			ws.send(\"hello server!\");
-			addStatus(\"sent message to server: 'hello server'!\");
-		};
-		ws.onmessage = function (evt) {
-			var receivedMsg = evt.data;
-			addStatus(\"server sent the following: '\" + receivedMsg + \"'\");
-		};
-		ws.onclose = function() {
-			// websocket was closed
-			addStatus(\"websocket was closed\");
-		};
-	} else {
-		// browser does not support websockets
-		addStatus(\"sorry, your browser does not support websockets.\");
-	}
-}
-</script>
-</head>
-<body onload=\"ready();\">
-Hi!
-<div id=\"status\"></div>
-</body>
-</html>">>, Req),
-	{ok, Req2, State}.
+
+    Html = << "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=ISO-8859-1\">
+    <title>Websocket client</title>
+	      <script src=\"http://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js\"></script>
+    <script type=\"text/javascript\">
+      var websocket;
+
+	      $(document).ready(init);
+
+      function init() {
+          if(!(\"WebSocket\" in window)){  
+              $('#status').append('<p><span style=\"color: red;\">web sockets are not supported </span></p>');
+              $(\"#navigation\").hide();  
+          }
+          else
+          {
+              $('#status').append('<p><span style=\"color: green;\">web sockets are supported </span></p>');
+          }
+          $(\"#connected\").hide(); 	
+          $(\"#content\").hide(); 	
+      };
+
+      function connect()
+      {
+
+          wsHost = $(\"#server\").val()
+          websocket = new WebSocket(wsHost);
+          showScreen('<b>Connecting to: ' +  wsHost + '</b>'); 
+
+          websocket.onopen = function(evt) { onOpen(evt) }; 
+          websocket.onclose = function(evt) { onClose(evt) }; 
+          websocket.onmessage = function(evt) { onMessage(evt) }; 
+          websocket.onerror = function(evt) { onError(evt) }; 
+      };  
+
+      
+      function disconnect()
+      {
+          websocket.close();
+      }; 
+
+
+      function sendTxt()
+      {
+         txt = $(\"#send_txt\").val();
+         websocket.send(txt);
+         showScreen('sending: ' + txt); 
+      };
+
+      function onOpen(evt) 
+      { 
+            showScreen('<span style=\"color: green;\">CONNECTED </span>'); 
+            $(\"#connected\").fadeIn('slow');
+            $(\"#content\").fadeIn('slow');
+      };  
+
+
+      function onClose(evt) 
+      { 
+          showScreen('<span style=\"color: red;\">DISCONNECTED </span>');
+      };  
+
+
+      function onMessage(evt) 
+      { 
+          showScreen('<span style=\"color: blue;\">RESPONSE: ' + evt.data+ '</span>'); 
+      };  
+
+
+      function showScreen(txt) 
+      { 
+           $('#output').prepend('<p>' + txt + '</p>');
+      };
+
+    </script>
+  </head>
+
+  <body>
+    <div id=\"header\">
+      <h1>Websocket client</h1>
+      <div id=\"status\"></div>
+    </div>
+
+
+    <div id=\"navigation\">
+
+      <p id=\"connecting\">
+	<input type='text' id=\"server\" value=\"ws://localhost:8080/websocket\"></input>
+	<button type=\"button\" onclick=\"connect()\">connect</button>
+	<button type=\"button\" onclick=\"disconnect()\">disconnect</button>
+      </p>
+      <div id=\"connected\">				
+	<p>
+	  <input type='text' id=\"send_txt\" value=""></input>
+	  <button type=\"button\" onclick=\"sendTxt();\">send</button>
+	</p>
+      </div>
+
+      <div id=\"content\">						
+	<button id=\"clear\" onclick=\"clearScreen()\" >Clear text</button>
+	<div id=\"output\"></div>
+      </div>
+
+    </div>
+  </body>
+</html> ">>,
+
+    {ok, Req2} = cowboy_http_req:reply(200, [{'Content-Type', <<"text/html">>}], Html, Req),
+    {ok, Req2, State}.
 
 terminate(_Req, _State) ->
 	ok.
