@@ -1,3 +1,12 @@
 deps/*
+test/deps/*
 ebin/*
-test/*beam
+test/ebin/*
+*~
+*/*~
+*/*/*~
+*/*/*/*~
+*.dump
+*/*.dump
+
+
