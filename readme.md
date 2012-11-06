@@ -1,5 +1,5 @@
 ## ewsclient 
-**ewsclient** is a websocket client written in erlang.
+**ewsclient** is a multi websocket client written in erlang.
 
 **License:** 
 
@@ -12,19 +12,18 @@
 ```shell
 make
 ```
-This project uses rebar to compile it. If you want more info, please, check https://github.com/basho/rebar
+This project uses rebar to compile it. If you want more info about it, please, check https://github.com/basho/rebar
 
 
 ### Test 
-run the test.
+run the tests.
 ```shell
 make test
 ```
 
-
 ## Usage Examples
 
-Start erlang and ewsclient.
+Start ewsclient and erlang console.
 ```shell
 $ cd /path/to/project/
 $ make
@@ -33,12 +32,33 @@ $ erl -pa ebin -pa deps/wsock/ebin -s ewsclient
 erlang shell:
 
 ```erlang
+
 1> {ok, Ws} = ewsclient:start_client().
+{ok,{ewsclient,<0.39.0>}}
 2> Ws:connect("ws://echo.websocket.org").
+default on_open.
 ok
 3> Ws:send("data string").
 ok
 default on_msg :: receive: "data string"
+4> FOnMsg = fun(Msg) -> io:format("new on msg: received: ~p~n", [Msg]) end.
+#Fun<erl_eval.6.80247286>
+5> Ws:override_callback({on_msg, FOnMsg}).          
+ok
+6> Ws:send("string").
+ok
+new on msg: received: "string"
+7> Host = "ws://echo.websocket.org".
+"ws://echo.websocket.org"
+8> FOnOpen = fun() -> io:format("new on open fun~n") end.
+#Fun<erl_eval.20.21881191>
+9> Parmas = [{connect, Host},{callbacks,[{on_open, FOnOpen},{on_msg, FOnMsg}]}].
+10> {ok, Ws2} = ewsclient:start_client(Parmas).
+new on open fun
+{ok,{ewsclient,<0.52.0>}}
+11> Ws2:send("string").
+ok
+new on msg: received: "string"
 ```
 
 
