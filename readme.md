@@ -40,3 +40,15 @@ ok
 ok
 default on_msg :: receive: "data string"
 ```
+
+
+###Start local server for testing
+Run a mirror websocket server on ws://localhost:8080/websocket
+
+```shell
+$ cd /path/to/project/
+$ cd test
+$ ../rebar get deps
+$ ../rebar compile
+$ erl -pa ebin -pa deps/cowboy/ebin -s wstestserver
+```
