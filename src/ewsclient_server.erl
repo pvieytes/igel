@@ -9,13 +9,14 @@
 
 -module(ewsclient_server).
 
--include_lib("include/ewsclient.hrl").
+-include_lib("wsock/include/wsock.hrl").
 
 -behaviour(gen_server).
 
 %% API
 -export([start_link/1
 	]).
+
 
 %% Debug
 -compile([export_all]).
@@ -25,10 +26,12 @@
 	 terminate/2, code_change/3]).
 
 %% State
-%% Ready States
+
+%% Client Status
 -define(CONNECTING,0).
 -define(OPEN,1).
 -define(CLOSE,2).
+
 -record(callbacks, {
 	  on_open=fun() ->
 			  default_on_open()
@@ -43,12 +46,15 @@
 			   default_on_close()
 		   end
 	 }).
--record(state, {socket,
-		status=?CLOSE,
-		headers=[],
-		callbacks=#callbacks{},
-		connection_resp
-	       }).
+
+-record(state, {
+	  openhandshake,
+	  handshakeresponse,
+	  socket,
+	  status=?CLOSE,
+	  callbacks=#callbacks{},
+	  connection_resp
+	 }).
 
 
 %%%===================================================================
@@ -123,38 +129,33 @@ init(Params) ->
 handle_call({connect, Url, ConnectionResponse}, _From, State) ->
     case State#state.status of
 	?CLOSE ->
-	    R =
-		case parse_ws_url(Url) of
-		    error -> 
-			{error, "url is not valid"};
-		    {Host, Port, Path} ->  
-			case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
-			    {ok, Sock} ->
-				Request = ewsclient_ws13:create_handshake_req(Host, Port, Path),
-				ok = gen_tcp:send(Sock,Request),
-				inet:setopts(Sock, [{packet, http}]),
-				CallBacks = State#state.callbacks,
-				OnOpen = CallBacks#callbacks.on_open,
-				OnOpen(),
-				{ok, Sock};
-			    TcpError ->
-				{error, TcpError}
-			end
-		end,
-	    case R of
-		{ok, Socket} ->
-		    NewConnectionResp = 
-			case ConnectionResponse of
-			    from_start ->
-				State#state.connection_resp;
-			    {from_connect, From} ->
-				{connected, From}
-			end,
-		    {reply, waiting, State#state{socket=Socket, 
-					  status=?CONNECTING,
-					  connection_resp=NewConnectionResp}};
-		Error->
-		    {reply, Error, State}
+	    case parse_ws_url(Url) of
+		error -> 
+		    {error, "url is not valid"};
+		{Host, Port, Path} ->  
+		    case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
+			{ok, Sock} ->
+			    {ok, HandshakeRequest} = wsock_handshake:open(Path, Host, Port),
+			    Req = wsock_http:encode(HandshakeRequest#handshake.message),
+			    ok = gen_tcp:send(Sock, Req),
+			    inet:setopts(Sock, [{packet, http}]),
+			    CallBacks = State#state.callbacks,
+			    OnOpen = CallBacks#callbacks.on_open,
+			    OnOpen(),
+			    NewConnectionResp = 
+				case ConnectionResponse of
+				    from_start ->
+					State#state.connection_resp;
+				    {from_connect, From} ->
+					{connected, From}
+				end,
+			    {reply, waiting, State#state{socket=Sock, 
+							 openhandshake=HandshakeRequest,
+							 status=?CONNECTING,
+							 connection_resp=NewConnectionResp}};
+			TcpError ->
+			    {reply, {error, TcpError}, State}
+		    end
 	    end;
 	?CONNECTING ->
 	    {reply,
@@ -177,8 +178,7 @@ handle_call(disconnect, _From, State) ->
 	    CallBacks = State#state.callbacks,
 	    OnClose = CallBacks#callbacks.on_close,
 	    OnClose(),
-	    {reply, ok, State#state{status=?CLOSE,
-				    headers=[]}}
+	    {reply, ok, State#state{status=?CLOSE}}
     end;    
 
 handle_call({send, Data}, _From, State) ->
@@ -263,16 +263,30 @@ handle_cast(_Msg, State) ->
 
 %% Start handshake
 handle_info({http,Socket,{http_response,{1,1},101,_Msg}}, State) ->
-    State1 = State#state{status=?CONNECTING,socket=Socket},
+    HttpMsg = #http_message{type=response, 
+			     start_line=[{status, "101"}],
+			     headers=[]},
+    State1 = State#state{status=?CONNECTING,
+			 socket=Socket,
+			handshakeresponse=HttpMsg},
     {noreply, State1};
 
 %% Extract the headers
 handle_info({http,Socket,{http_header, _, Name, _, Value}},State) ->
     case State#state.status of
         ?CONNECTING ->
-            H = [{Name,Value} | State#state.headers],
-            State1 = State#state{headers=H,socket=Socket},
-            {noreply,State1};
+	    Key = case Name of 
+		      Name when is_atom(Name) ->atom_to_list(Name);
+		      Name when is_list(Name) -> Name
+		  end,
+	    Response = State#state.handshakeresponse,
+	    Headers = Response#http_message.headers,
+            NewState = State#state{
+			 socket=Socket,
+			 handshakeresponse=
+			     Response#http_message{headers=[{Key, Value}|Headers]}
+			},
+            {noreply, NewState};
         undefined ->
             %% Bad state should have received response first
             {stop, error, State}
@@ -281,14 +295,16 @@ handle_info({http,Socket,{http_header, _, Name, _, Value}},State) ->
 %% Once we have all the headers, check for the 'Upgrade' flag 
 handle_info({http, Socket, http_eoh},State) ->
     %% Validate headers, set state, change packet type back to raw
-    Headers = State#state.headers, 
-    case ewsclient_ws13:check_handshake_server_response(Headers) of
-	ok ->
+    OpenHandshake = State#state.openhandshake,
+    HandshakeResponse = State#state.handshakeresponse,
+    case wsock_handshake:handle_response(HandshakeResponse, OpenHandshake) of
+
+	{ok, _} ->
 	    inet:setopts(Socket, [{packet, raw}]),
 	    ConnectioResp = State#state.connection_resp,
 	    gen_server:cast(ewsclient, ConnectioResp),
 	    {noreply, State#state{status=?OPEN}};
-	_ ->
+	_E ->
 	    CallBacks = State#state.callbacks,
 	    OnError = CallBacks#callbacks.on_error,
 	    OnError(),
@@ -299,11 +315,11 @@ handle_info({http, Socket, http_eoh},State) ->
 handle_info({tcp, _Socket, Data},State) ->
     case State#state.status of
         ?OPEN ->
-	    case ewsclient_ws13:parse_received_data(Data) of
-		{?OP_TEXT, String}->
+	    case  wsock_message:decode(Data, []) of
+		[Msg=#message{type=text}|_] ->
 		    CallBacks = State#state.callbacks,
 		    OnMsg = CallBacks#callbacks.on_msg,
-		    OnMsg(String);
+		    OnMsg(Msg#message.payload);
 		_Else ->
 		    CallBacks = State#state.callbacks,
 		    OnError = CallBacks#callbacks.on_error,
