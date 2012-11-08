@@ -12,6 +12,6 @@ test: all
 		-pa deps/wsock/ebin \
 		-pa test/ebin \
 		-pa test/deps/cowboy/ebin \
-		-s ewsclient_tests \
+		-s igel_tests \
 		-s erlang halt
 

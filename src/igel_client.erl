@@ -7,7 +7,7 @@
 %%% Created : 30 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
 %%%-------------------------------------------------------------------
 
--module(ewsclient_client).
+-module(igel_client).
 
 -include_lib("wsock/include/wsock.hrl").
 
@@ -104,7 +104,7 @@ init(Params) ->
 	end,
     case proplists:get_value(connect, Params) of
 	undefined ->
-	    gen_server:cast(ewsclient, {started, From, self()}),
+	    gen_server:cast(igel, {started, From, self()}),
 	    {ok, State};
 	Url ->
 	    Server = self(),
@@ -302,7 +302,7 @@ handle_info({http, Socket, http_eoh},State) ->
 	{ok, _} ->
 	    inet:setopts(Socket, [{packet, raw}]),
 	    ConnectioResp = State#state.connection_resp,
-	    gen_server:cast(ewsclient, ConnectioResp),
+	    gen_server:cast(igel, ConnectioResp),
 	    {noreply, State#state{status=?OPEN}};
 	_E ->
 	    CallBacks = State#state.callbacks,

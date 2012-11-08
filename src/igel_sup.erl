@@ -7,7 +7,7 @@
 %%% Created : 30 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
 %%%-------------------------------------------------------------------
 
--module(ewsclient_sup).
+-module(igel_sup).
 
 -behaviour(supervisor).
 
@@ -32,6 +32,6 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Ews = {ewsclient, {ewsclient, start_link, []}, permanent, 5000, worker, dynamic},
-    {ok, { {one_for_one, 5, 10}, [Ews]} }.
+    Igel = {igel, {igel, start_link, []}, permanent, 5000, worker, dynamic},
+    {ok, { {one_for_one, 5, 10}, [Igel]} }.
 

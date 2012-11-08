@@ -7,7 +7,7 @@
 %%% Created : 30 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
 %%%-------------------------------------------------------------------
 
--module(ewsclient_app).
+-module(igel_app).
 
 -behaviour(application).
 
@@ -19,7 +19,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    ewsclient_sup:start_link().
+    igel_sup:start_link().
 
 stop(_State) ->
     ok.

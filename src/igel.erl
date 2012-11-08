@@ -7,7 +7,7 @@
 %%% Created : 30 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
 %%%-------------------------------------------------------------------
 
--module(ewsclient).
+-module(igel).
 
 -behaviour(gen_server).
 
@@ -26,7 +26,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--define(CHILD(Id, Params), {Id, {ewsclient_client, start_link, [Params]}, permanent, 5000, worker, dynamic}).
+-define(CHILD(Id, Params), {Id, {igel_client, start_link, [Params]}, permanent, 5000, worker, dynamic}).
 
 
 -define(SERVER, ?MODULE). 
@@ -40,7 +40,7 @@
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% start ewsclient application
+%% start igel application
 %%
 %% @spec start() -> ok | {error | Error}
 %%
@@ -53,7 +53,7 @@ start()->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% start ewsclient client
+%% start igel client
 %%
 %% @spec start_client() -> {ok, pid()} | {error, Error}
 %%
@@ -66,7 +66,7 @@ start_client()->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% start ewsclient client
+%% start igel client
 %%
 %% @spec start_client(List::[Element::element()]) -> {ok, pid()} | {error, Error}
 %%
@@ -183,7 +183,7 @@ handle_call({start_client, Params}, From, State) ->
     P = [{from, From}|Params],
     RandomId = make_ref(),
     ChildSpec =  ?CHILD(RandomId, P),
-    case supervisor:start_child(ewsclient_sup, ChildSpec) of
+    case supervisor:start_child(igel_sup, ChildSpec) of
 	{ok, _Pid}->
 	    {noreply, State};
     	Error ->

@@ -1,5 +1,5 @@
-## ewsclient 
-**ewsclient** is a multi websocket client written in erlang.
+## igel 
+**igel** is a multi websocket client written in erlang.
 
 **License:** 
 
@@ -23,18 +23,18 @@ make test
 
 ## Usage Examples
 
-Start ewsclient and erlang console.
+Start igel and erlang console.
 ```shell
 $ cd /path/to/project/
 $ make
-$ erl -pa ebin -pa deps/wsock/ebin -s ewsclient
+$ erl -pa ebin -pa deps/wsock/ebin -pa deps/wsock -pa deps/wsock/include -s igel
 ```
 erlang shell:
 
 ```erlang
 
-1> {ok, Ws} = ewsclient:start_client().
-{ok,{ewsclient,<0.39.0>}}
+1> {ok, Ws} = igel:start_client().
+{ok,{igel,<0.39.0>}}
 2> Ws:connect("ws://echo.websocket.org").
 default on_open.
 ok
@@ -53,9 +53,9 @@ new on msg: received: "string"
 8> FOnOpen = fun() -> io:format("new on open fun~n") end.
 #Fun<erl_eval.20.21881191>
 9> Parmas = [{connect, Host},{callbacks,[{on_open, FOnOpen},{on_msg, FOnMsg}]}].
-10> {ok, Ws2} = ewsclient:start_client(Parmas).
+10> {ok, Ws2} = igel:start_client(Parmas).
 new on open fun
-{ok,{ewsclient,<0.52.0>}}
+{ok,{igel,<0.52.0>}}
 11> Ws2:send("string").
 ok
 new on msg: received: "string"

@@ -6,15 +6,15 @@
 %%% @end
 %%% Created : 31 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
 %%%-------------------------------------------------------------------
--module(ewsclient_tests).
+-module(igel_tests).
 -include_lib("eunit/include/eunit.hrl").
 -export([start/0]).
 
 start() ->
-    eunit:test(ewsclient).
+    eunit:test(igel).
 
 echo_websocket_org_test() ->
-    %%start ewsclient app
+    %%start igel app
     app_test_funs(),
 
     %% ws client test functions
@@ -29,10 +29,10 @@ echo_websocket_org_test() ->
 
 app_test_funs() ->
     %% start client without start the app
-    ?assertException(_ClassPattern, _TermPattern, ewsclient:start_client()),
+    ?assertException(_ClassPattern, _TermPattern, igel:start_client()),
     
-    %% start ewsclient app
-    ewsclient:start().
+    %% start igel app
+    igel:start().
 
 
 
@@ -42,7 +42,7 @@ ws_test_funs(Host) ->
     ?debugMsg("Host: " ++ Host),
  
     %% start client
-    WsStarted =  ewsclient:start_client(),
+    WsStarted =  igel:start_client(),
     ?assertMatch({ok, _Ws}, WsStarted),
     {ok, Ws} = WsStarted,
     ?assertMatch({error, _}, Ws:send("test")),
@@ -80,7 +80,7 @@ ws_test_funs(Host) ->
     		{on_msg, FMirror}
     	       ]}
     	     ],
-    Ws2Started = ewsclient:start_client(Parmas),
+    Ws2Started = igel:start_client(Parmas),
     ?assertMatch({ok, _Ws2}, Ws2Started),
     ?assertMatch(open, read_mailbox()).
    
