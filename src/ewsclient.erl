@@ -26,7 +26,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--define(CHILD(Id, Params), {Id, {ewsclient_server, start_link, [Params]}, permanent, 5000, worker, dynamic}).
+-define(CHILD(Id, Params), {Id, {ewsclient_client, start_link, [Params]}, permanent, 5000, worker, dynamic}).
 
 
 -define(SERVER, ?MODULE). 

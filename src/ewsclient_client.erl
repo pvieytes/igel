@@ -7,7 +7,7 @@
 %%% Created : 30 Oct 2012 by Pablo Vieytes <mail@pablovieytes.com>
 %%%-------------------------------------------------------------------
 
--module(ewsclient_server).
+-module(ewsclient_client).
 
 -include_lib("wsock/include/wsock.hrl").
 
