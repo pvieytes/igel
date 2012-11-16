@@ -62,7 +62,6 @@
 start()->
     application:start(?MODULE).
 
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -75,7 +74,6 @@ start()->
 start_client()->
     start_client([]).
    
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -111,7 +109,9 @@ close_client({_Mod, WsClientPid})->
 %%
 %%--------------------------------------------------------------------
 connect(Url, {_Mod, WsClientPid}) ->
-    gen_server:call(?MODULE, {connect, Url, WsClientPid}). 
+    gen_server:call(WsClientPid,{connect, Url}).
+
+    %% gen_server:call(?MODULE, {connect, Url, WsClientPid}). 
 
 %%--------------------------------------------------------------------
 %% @private
@@ -192,23 +192,40 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({start_client, Params}, From, State) ->
-    P = [{from, From}|Params],
+handle_call({start_client, Params}, _From, State) ->
     RandomId = make_ref(),
-    ChildSpec =  ?CHILD(RandomId, P),
+    ChildSpec =  ?CHILD(RandomId, []),
     case supervisor:start_child(igel_sup, ChildSpec) of
-	{ok, _Pid}->
-	    {noreply, State};
+	{ok, ClientPid}->
+	    %% override funs
+	    OverrideStatus =
+		case proplists:get_value(callbacks, Params) of
+		    undefined ->
+			ok;
+		    CallbackInfo  ->
+			override_callback(CallbackInfo, {?MODULE, ClientPid})
+		end,
+	    ConnectStatus =
+		case OverrideStatus of
+		    ok->		  
+			%% connect
+			case proplists:get_value(connect, Params) of
+			    undefined ->
+				ok;
+			    Host ->
+				connect(Host, {?MODULE, ClientPid})
+			end;
+		    Else -> Else
+		end,
+	    
+		   
+	    case ConnectStatus of
+		ok ->
+		    {reply, {ok, {?MODULE, ClientPid}}, State};
+		Error -> Error
+	    end;
     	Error ->
     	  {reply, {error, Error}, State}
-    end;
-
-handle_call({connect, Url, WsClientPid}, From, State) ->
-    case gen_server:call(WsClientPid, {connect, Url, {from_connect, From}}) of
-    	waiting ->
-    	    {noreply, State};
-    	Error ->
-    	    {reply, Error, State}
     end;
 
 handle_call(_Request, _From, State) ->
@@ -225,14 +242,10 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast({started, From, WsClient}, State) ->
-    Reply = {ok, {?MODULE, WsClient}},
-    gen_server:reply(From, Reply),
-    {noreply, State};
+handle_cast(_Msg, State) ->
+     {noreply, State}.
 
-handle_cast({connected, From}, State) ->
-    gen_server:reply(From, ok),
-    {noreply, State}.
+
 
 %%--------------------------------------------------------------------
 %% @private

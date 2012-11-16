@@ -65,7 +65,7 @@
 	  socket,
 	  status=?CLOSE,
 	  callbacks=#callbacks{},
-	  connection_resp
+	  connection_resp_to
 	 }).
 
 
@@ -98,32 +98,9 @@ start_link(Params) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init(Params) ->
-    From = proplists:get_value(from, Params),
-    State= 
-	case proplists:get_value(callbacks, Params) of
-	    undefined ->  #state{};
-	    Callbacks ->
-		lists:foldl(
-		  fun({CbKey, Callback}, StateAcc) ->
-			case override_callback(CbKey, Callback, StateAcc) of
-			    error -> StateAcc;
-			    State -> State
-			end
-		  end,
-		  #state{},
-		  Callbacks)
-	end,
-    case proplists:get_value(connect, Params) of
-	undefined ->
-	    gen_server:cast(igel, {started, From, self()}),
-	    {ok, State};
-	Url ->
-	    Server = self(),
-	    spawn(fun() -> gen_server:call(Server, {connect, Url, from_start}) end),
-	    {ok, State#state{connection_resp={started, From, self()}}}
-    end.
-
+init(_Params) ->
+    {ok, #state{}}.
+    
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -138,7 +115,7 @@ init(Params) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({connect, Url, ConnectionResponse}, _From, State) ->
+handle_call({connect, Url}, From, State) ->
     case State#state.status of
 	?CLOSE ->
 	    case parse_ws_url(Url) of
@@ -153,18 +130,11 @@ handle_call({connect, Url, ConnectionResponse}, _From, State) ->
 			    inet:setopts(Sock, [{packet, http}]),
 			    CallBacks = State#state.callbacks,
 			    OnOpen = CallBacks#callbacks.on_open,
-			    OnOpen(),
-			    NewConnectionResp = 
-				case ConnectionResponse of
-				    from_start ->
-					State#state.connection_resp;
-				    {from_connect, From} ->
-					{connected, From}
-				end,
-			    {reply, waiting, State#state{socket=Sock, 
-							 openhandshake=HandshakeRequest,
-							 status=?CONNECTING,
-							 connection_resp=NewConnectionResp}};
+			    OnOpen(),			   		    
+			    {noreply, State#state{socket=Sock, 
+						  openhandshake=HandshakeRequest,
+						  status=?CONNECTING,
+						  connection_resp_to=From}};
 			TcpError ->
 			    {reply, {error, TcpError}, State}
 		    end
@@ -273,6 +243,9 @@ handle_cast(_Msg, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
+
+%% MANAGE SOCKET MESSAGES
+
 %% Start handshake
 handle_info({http,Socket,{http_response,{1,1},101,_Msg}}, State) ->
     HttpMsg = #http_message{type=response, 
@@ -301,6 +274,8 @@ handle_info({http,Socket,{http_header, _, Name, _, Value}},State) ->
             {noreply, NewState};
         undefined ->
             %% Bad state should have received response first
+    	    ConnectionFrom = State#state.connection_resp_to,
+	    gen_server:reply(ConnectionFrom, {error, "connection error"}),
             {stop, error, State}
     end;
 
@@ -309,17 +284,18 @@ handle_info({http, Socket, http_eoh},State) ->
     %% Validate headers, set state, change packet type back to raw
     OpenHandshake = State#state.openhandshake,
     HandshakeResponse = State#state.handshakeresponse,
+    ConnectionFrom = State#state.connection_resp_to,
     case wsock_handshake:handle_response(HandshakeResponse, OpenHandshake) of
 
 	{ok, _} ->
 	    inet:setopts(Socket, [{packet, raw}]),
-	    ConnectioResp = State#state.connection_resp,
-	    gen_server:cast(igel, ConnectioResp),
+	    gen_server:reply(ConnectionFrom, ok),
 	    {noreply, State#state{status=?OPEN}};
 	_E ->
 	    CallBacks = State#state.callbacks,
 	    OnError = CallBacks#callbacks.on_error,
 	    OnError(),
+	    gen_server:reply(ConnectionFrom, {error, "connection error"}),
 	    {noreply, State#state{status=?CLOSE}}  
     end;
 
@@ -379,7 +355,7 @@ default_on_open()->
     io:format("default on_open.~n").
 
 default_on_msg(Msg) ->
-    io:format("default on_msg :: receive: ~p~n", [Msg]).
+    io:format("default on_msg; receive: ~p~n", [Msg]).
 
 default_on_error()->
     io:format("default on_error.~n").
