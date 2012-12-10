@@ -319,9 +319,8 @@ handle_info({tcp, _Socket, Data},State) ->
     end;
 
 
-handle_info({tcp_closed,_Port}, State) ->
-    {noreply, State#state.status=?CLOSE}.
-
+handle_info({tcp_closed, _Port}, State) ->
+    {noreply, State#state{status=?CLOSE}};
 
 handle_info(_Info, State) ->
     io:format("dbg handle info received: ~p~n", [_Info]),
