@@ -58,31 +58,31 @@ ws_test_funs(Host) ->
     WsStarted =  igel:start_client(),
     ?assertMatch({ok, _Ws}, WsStarted),
     {ok, Ws} = WsStarted,
-    ?assertMatch({error, _}, Ws:send("test")),
+    ?assertMatch({error, _}, igel:send(Ws, "test")),
     
     %% override callbacks
     TestProcessPid = self(),
     FMirror =fun (Msg) -> TestProcessPid !  Msg end,
-    ?assertMatch(ok, Ws:override_callback({on_msg, FMirror})),
+    ?assertMatch(ok, igel:override_callback(Ws, {on_msg, FMirror})),
     FOnclose = fun () ->  TestProcessPid ! closed end,
-    ?assertMatch(ok, Ws:override_callback([{on_close, FOnclose}])),
+    ?assertMatch(ok, igel:override_callback(Ws, [{on_close, FOnclose}])),
     FOnOpen =  fun () ->  TestProcessPid ! open end,
-    ?assertMatch(ok, Ws:override_callback({on_open, FOnOpen})),
+    ?assertMatch(ok, igel:override_callback(Ws, {on_open, FOnOpen})),
 
     %% connect
-    ?assertMatch(ok, Ws:connect(Host)),
+    ?assertMatch(ok, igel:connect(Ws, Host)),
     ?assertMatch(open, read_mailbox()),
-    ?assertMatch({error,_}, Ws:connect(Host)),
+    ?assertMatch({error,_}, igel:connect(Ws, Host)),
    
     %%send msgs
     Text = "test",
-    ?assertMatch(ok, Ws:send(Text)),
+    ?assertMatch(ok, igel:send(Ws, Text)),
     ?assertMatch(Text, read_mailbox()),
 
     %% disconnect
-    ?assertMatch(ok, Ws:disconnect()),
+    ?assertMatch(ok, igel:disconnect(Ws)),
     ?assertMatch(closed, read_mailbox()),
-    ?assertMatch({error,_}, Ws:disconnect()),
+    ?assertMatch({error,_}, igel:disconnect(Ws)),
 
     %% start client with params
     Parmas = [{connect, Host},

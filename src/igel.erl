@@ -93,10 +93,10 @@ start_client(Params) ->
 %% @doc
 %% Close the client
 %%
-%% @spec close_client({Module::atom(), WsClienPidt::pid()}) -> ok
+%% @spec close_client(WsClienPidt::pid()) -> ok
 %%
 %%--------------------------------------------------------------------
-close_client({_Mod, WsClientPid})->
+close_client(WsClientPid)->
     gen_server:call(WsClientPid, close).  
 
 
@@ -105,23 +105,21 @@ close_client({_Mod, WsClientPid})->
 %% @doc
 %% Connect the client
 %%
-%% @spec connect(Url::string(), {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%% @spec connect(Url::string(), WsClienPidt::pid()) -> ok | {error, Error}
 %%
 %%--------------------------------------------------------------------
-connect(Url, {_Mod, WsClientPid}) ->
+connect(WsClientPid, Url) ->
     gen_server:call(WsClientPid,{connect, Url}).
-
-    %% gen_server:call(?MODULE, {connect, Url, WsClientPid}). 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Disconnect the client
 %%
-%% @spec disconnect({Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%% @spec disconnect(WsClienPidt::pid()) -> ok | {error, Error}
 %%
 %%--------------------------------------------------------------------
-disconnect({_Mod, WsClientPid}) ->
+disconnect(WsClientPid) ->
     gen_server:call(WsClientPid, disconnect).  
 
 %%--------------------------------------------------------------------
@@ -129,10 +127,10 @@ disconnect({_Mod, WsClientPid}) ->
 %% @doc
 %% send data
 %%
-%% @spec send(Dataa::string, {Module::atom(), WsClienPidt::pid()}) -> ok | {error, Error}
+%% @spec send(Dataa::string, WsClienPidt::pid()) -> ok | {error, Error}
 %%
 %%--------------------------------------------------------------------
-send(Data, {_Mod, WsClientPid}) ->
+send(WsClientPid, Data) ->
     gen_server:call(WsClientPid, {send, Data}).  
 
 
@@ -141,13 +139,13 @@ send(Data, {_Mod, WsClientPid}) ->
 %% @doc
 %% Override the callback
 %%
-%% @spec override_callback(CallbackInfo::callbackinfo(), {Module::atom(), WsClienPidt::pid()}) -> 
+%% @spec override_callback(CallbackInfo::callbackinfo(),  WsClienPidt::pid()) -> 
 %%               ok | {error, Error}
 %%
 %% callbackinfo() = {CbKey::atom(), Fun::fun()} | [{CbKey::atom(), Fun::fun()}]
 %% callback() = on_open | on_error | on_message | on_close
 %%--------------------------------------------------------------------
-override_callback(CallbackInfo, {_Mod, WsClientPid}) ->
+override_callback(WsClientPid, CallbackInfo) ->
     gen_server:call(WsClientPid, {override_callback, CallbackInfo}).
 
 %%--------------------------------------------------------------------
@@ -203,7 +201,7 @@ handle_call({start_client, Params}, _From, State) ->
 		    undefined ->
 			ok;
 		    CallbackInfo  ->
-			override_callback(CallbackInfo, {?MODULE, ClientPid})
+			override_callback(ClientPid, CallbackInfo)
 		end,
 	    ConnectStatus =
 		case OverrideStatus of
@@ -213,7 +211,7 @@ handle_call({start_client, Params}, _From, State) ->
 			    undefined ->
 				ok;
 			    Host ->
-				connect(Host, {?MODULE, ClientPid})
+				connect(ClientPid, Host)
 			end;
 		    Else -> Else
 		end,
@@ -221,7 +219,7 @@ handle_call({start_client, Params}, _From, State) ->
 		   
 	    case ConnectStatus of
 		ok ->
-		    {reply, {ok, {?MODULE, ClientPid}}, State};
+		    {reply, {ok, ClientPid}, State};
 		Error -> Error
 	    end;
     	Error ->
