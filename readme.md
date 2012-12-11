@@ -51,29 +51,20 @@ erlang shell:
 ```erlang
 
 1> {ok, Ws} = igel:start_client().
-{ok,{igel,<0.39.0>}}
-2> Ws:connect("ws://echo.websocket.org").
+2> igel:connect(Ws, "ws://echo.websocket.org").
 default on_open.
-ok
-3> Ws:send("data string").
-ok
+3> igel:send(Ws, "data string").
 default on_msg :: receive: "data string"
 4> FOnMsg = fun(Msg) -> io:format("new on msg: received: ~p~n", [Msg]) end.
-#Fun<erl_eval.6.80247286>
-5> Ws:override_callback({on_msg, FOnMsg}).          
-ok
-6> Ws:send("string").
-ok
+5> igel:override_callback(Ws, {on_msg, FOnMsg}).          
+6> igel:send(Ws, "string").
 new on msg: received: "string"
 7> Host = "ws://echo.websocket.org".
-"ws://echo.websocket.org"
 8> FOnOpen = fun() -> io:format("new on open fun~n") end.
-#Fun<erl_eval.20.21881191>
 9> Parmas = [{connect, Host},{callbacks,[{on_open, FOnOpen},{on_msg, FOnMsg}]}].
 10> {ok, Ws2} = igel:start_client(Parmas).
 new on open fun
-{ok,{igel,<0.52.0>}}
-11> Ws2:send("string").
+11> igel:send(Ws2, "string").
 ok
 new on msg: received: "string"
 ```
