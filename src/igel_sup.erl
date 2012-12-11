@@ -45,6 +45,5 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Igel = {igel, {igel, start_link, []}, permanent, 5000, worker, dynamic},
-    {ok, { {one_for_one, 5, 10}, [Igel]} }.
+    {ok, { {one_for_one, 5, 10}, []} }.
 
