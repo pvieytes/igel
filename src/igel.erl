@@ -23,7 +23,7 @@
 -module(igel).
 
 %% API
--export(start/0,
+-export([start/0,
 	start_client/0,
 	start_client/1,
 	close_client/1,
