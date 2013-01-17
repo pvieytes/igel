@@ -34,7 +34,6 @@
 
 -define(CHILD(Id, Params), {Id, {igel_client, start_link, [Params]}, permanent, 5000, worker, dynamic}).
 
--record(state, {}).
 
 %%%===================================================================
 %%% API
