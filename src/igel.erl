@@ -29,6 +29,7 @@
 	close_client/1,
 	disconnect/1,
 	connect/2,
+    connect/3,
 	send/2,
 	override_callback/2]).
 
