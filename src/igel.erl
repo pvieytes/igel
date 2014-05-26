@@ -129,11 +129,26 @@ close_client(WsClientPid)->
 %% @doc
 %% Connect the client
 %%
-%% @spec connect(Url::string(), WsClienPidt::pid()) -> ok | {error, Error}
+%% @spec connect(WsClienPidt::pid(), Url::string()) -> ok | {error, Error}
 %%
 %%--------------------------------------------------------------------
 connect(WsClientPid, Url) ->
-    gen_server:call(WsClientPid,{connect, Url}).
+    gen_server:call(WsClientPid,{connect, Url, []}).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Connect the client
+%%
+%% @spec connect(WsClienPidt::pid(), Url::string(), Cookie::string()) -> ok | {error, Error}
+%%
+%%--------------------------------------------------------------------
+
+connect(WsClientPid, Url, Cookie) ->
+    gen_server:call(WsClientPid, {connect, Url, Cookie}).
+
+
 
 %%--------------------------------------------------------------------
 %% @private
