@@ -300,7 +300,7 @@ handle_info({http, Socket, http_eoh},State) ->
 	ErrorReason ->
 	    CallBacks = State#state.callbacks,
 	    OnError = CallBacks#callbacks.on_error,
-	    OnError(Error),
+	    OnError(ErrorReason),
 	    gen_server:reply(ConnectionFrom, {error, "connection error"}),
 	    {noreply, State#state{status=?CLOSE}}  
     end;
