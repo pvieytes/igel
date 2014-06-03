@@ -51,8 +51,8 @@
 	  on_msg=fun(Msg) -> 
 			 default_on_msg(Msg) 
 		 end,
-	  on_error=fun() ->
-			   default_on_error()
+	  on_error=fun(Error) ->
+			   default_on_error(Error)
 		   end,
 	  on_close=fun() ->
 			   default_on_close()
@@ -297,10 +297,10 @@ handle_info({http, Socket, http_eoh},State) ->
 	    inet:setopts(Socket, [{packet, raw}]),
 	    gen_server:reply(ConnectionFrom, ok),
 	    {noreply, State#state{status=?OPEN}};
-	_E ->
+	ErrorReason ->
 	    CallBacks = State#state.callbacks,
 	    OnError = CallBacks#callbacks.on_error,
-	    OnError(),
+	    OnError(Error),
 	    gen_server:reply(ConnectionFrom, {error, "connection error"}),
 	    {noreply, State#state{status=?CLOSE}}  
     end;
@@ -314,10 +314,10 @@ handle_info({tcp, _Socket, Data},State) ->
 		    CallBacks = State#state.callbacks,
 		    OnMsg = CallBacks#callbacks.on_msg,
 		    OnMsg(Msg#message.payload);
-		_Else ->
+		OtherType ->
 		    CallBacks = State#state.callbacks,
 		    OnError = CallBacks#callbacks.on_error,
-		    OnError()
+		    OnError(OtherType)
 	    end,
 	    {noreply, State};
 	_ ->
@@ -367,8 +367,8 @@ default_on_open()->
 default_on_msg(Msg) ->
     io:format("default on_msg; receive: ~p~n", [Msg]).
 
-default_on_error()->
-    io:format("default on_error.~n").
+default_on_error(Error)->
+    io:format("default on_error ~p~n",[Error]).
 
 default_on_close() ->
     io:format("default on_close.~n").
