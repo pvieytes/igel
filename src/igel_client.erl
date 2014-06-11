@@ -51,8 +51,8 @@
 	  on_msg=fun(Msg) -> 
 			 default_on_msg(Msg) 
 		 end,
-	  on_error=fun() ->
-			   default_on_error()
+	  on_error=fun(Error) ->
+			   default_on_error(Error)
 		   end,
 	  on_close=fun() ->
 			   default_on_close()
@@ -115,16 +115,20 @@ init(_Params) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({connect, Url}, From, State) ->
+handle_call({connect, Url, Cookie}, From, State) ->
     case State#state.status of
 	?CLOSE ->
-	    case parse_ws_url(Url) of
+	    case parse_connect_url(Url) of
 		error -> 
 		    {error, "url is not valid"};
 		{Host, Port, Path} ->  
 		    case gen_tcp:connect(Host,Port,[binary,{packet, 0},{active,true}]) of
 			{ok, Sock} ->
-			    {ok, HandshakeRequest} = wsock_handshake:open(Path, Host, Port),
+                {ok, HandshakeRequest} = 
+                    case string:len(Cookie) of 
+                        [] -> wsock_handshake:open(Path, Host, Port);
+                        _Len -> wsock_handshake:open(Path, Host, Port, Cookie)
+                    end,
 			    Req = wsock_http:encode(HandshakeRequest#handshake.message),
 			    ok = gen_tcp:send(Sock, Req),
 			    inet:setopts(Sock, [{packet, http}]),
@@ -148,6 +152,8 @@ handle_call({connect, Url}, From, State) ->
 	     {error, "client is already connect"},
 	     State}
     end;
+
+
 
 handle_call(disconnect, _From, State) ->
     case  State#state.status of
@@ -291,10 +297,10 @@ handle_info({http, Socket, http_eoh},State) ->
 	    inet:setopts(Socket, [{packet, raw}]),
 	    gen_server:reply(ConnectionFrom, ok),
 	    {noreply, State#state{status=?OPEN}};
-	_E ->
+	ErrorReason ->
 	    CallBacks = State#state.callbacks,
 	    OnError = CallBacks#callbacks.on_error,
-	    OnError(),
+	    OnError(ErrorReason),
 	    gen_server:reply(ConnectionFrom, {error, "connection error"}),
 	    {noreply, State#state{status=?CLOSE}}  
     end;
@@ -308,10 +314,10 @@ handle_info({tcp, _Socket, Data},State) ->
 		    CallBacks = State#state.callbacks,
 		    OnMsg = CallBacks#callbacks.on_msg,
 		    OnMsg(Msg#message.payload);
-		_Else ->
+		OtherType ->
 		    CallBacks = State#state.callbacks,
 		    OnError = CallBacks#callbacks.on_error,
-		    OnError()
+		    OnError(OtherType)
 	    end,
 	    {noreply, State};
 	_ ->
@@ -361,8 +367,8 @@ default_on_open()->
 default_on_msg(Msg) ->
     io:format("default on_msg; receive: ~p~n", [Msg]).
 
-default_on_error()->
-    io:format("default on_error.~n").
+default_on_error(Error)->
+    io:format("default on_error ~p~n",[Error]).
 
 default_on_close() ->
     io:format("default on_close.~n").
@@ -410,17 +416,18 @@ override_callback(CbKey, Callback, State) ->
 %% @doc
 %% Convert the ws url string to a tuple
 %%
-%% @spec parse_ws_url(WsUrl::strin()) -> {Domain::string(), Port::integer(), Path::string()} 
+%% @spec parse_connect_url(WsUrl::strin()) -> {Domain::string(), Port::integer(), Path::string()} 
 %% @end
 %%--------------------------------------------------------------------
-parse_ws_url(WsUrl) ->
+parse_connect_url(WsUrl) ->
     Url =
-    	case string:str(WsUrl, "ws://") of
-    	    1 ->
-    		string:substr(WsUrl, 6);
-    	    0 ->
-    		WsUrl
-    	end,
+    	case string:str(WsUrl,"http://") of 
+            1 -> string:substr(WsUrl,8);
+            0 -> case string:str(WsUrl,"ws://") of 
+                    1 -> string:substr(WsUrl,6);
+                    0 -> WsUrl 
+                end 
+        end,
     {Domain, Port, PathList} =
 	case string:tokens(Url, ":") of
 	    [Url] ->
@@ -445,6 +452,7 @@ parse_ws_url(WsUrl) ->
 		"/" ++ string:join(PathList, "/")
 	end,
     {Domain, Port, Path}.
+
 
 
 
